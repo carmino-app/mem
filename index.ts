@@ -4,9 +4,7 @@ import mapAgeCleaner = require('map-age-cleaner');
 
 type AnyFunction = (...arguments_: any) => any;
 
-const decoratorInstanceMap = new WeakMap();
-
-const cacheStore = new WeakMap<AnyFunction>();
+const cacheStore = new WeakMap<AnyFunction, CacheStorage<any, any>>();
 
 interface CacheStorageContent<ValueType> {
 	data: ValueType;
@@ -172,29 +170,33 @@ mem.decorator = <
 	FunctionToMemoize extends AnyFunction,
 	CacheKeyType
 >(
-	options: Options<FunctionToMemoize, CacheKeyType> = {}
-) => (
-	target: any,
-	propertyKey: string,
-	descriptor: PropertyDescriptor
-): void => {
-	const input = target[propertyKey];
+	options: Options<FunctionToMemoize, CacheKeyType> = {},
+) => {
+	const instanceMap = new WeakMap();
 
-	if (typeof input !== 'function') {
-		throw new TypeError('The decorated value must be a function');
-	}
+	return (
+		target: any,
+		propertyKey: string,
+		descriptor: PropertyDescriptor,
+	): void => {
+		const input = target[propertyKey]; // eslint-disable-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+
+		if (typeof input !== 'function') {
+			throw new TypeError('The decorated value must be a function');
+		}
 
 	delete descriptor.value;
 	delete descriptor.writable;
 
-	descriptor.get = function () {
-		if (!decoratorInstanceMap.has(this)) {
-			const value = mem(input, options);
-			decoratorInstanceMap.set(this, value);
-			return value;
-		}
+		descriptor.get = function () {
+			if (!instanceMap.has(this)) {
+				const value = mem(input, options) as FunctionToMemoize;
+				instanceMap.set(this, value);
+				return value;
+			}
 
-		return decoratorInstanceMap.get(this);
+			return instanceMap.get(this) as FunctionToMemoize;
+		};
 	};
 };
 
